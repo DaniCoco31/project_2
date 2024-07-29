@@ -1,4 +1,8 @@
 import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import plotly.express as px
 """
 To clean the na values of a df
 """
@@ -28,3 +32,57 @@ def print_clean_data(df_input):
     print('After')
     print(df_input.isna().sum())
     return df_input
+
+# Function to calculate KPIs
+def calculate_kpis(df): 
+    kpis = {}
+
+    # Completion Rate
+    total_visits = df['visit_visitor_id'].nunique()
+    completed_visits = df[df['last_step'] == 'confirm']['visit_visitor_id'].nunique()
+    kpis['completion_rate'] = completed_visits / total_visits
+
+    # Time Spent on Each Step
+    kpis['avg_start_time'] = df['start_time'].mean()
+    kpis['avg_step_1_time'] = round(df['step_1'].mean(),2)
+    kpis['avg_step_2_time'] = round(df['step_2'].mean(),2)
+    kpis['avg_step_3_time'] = round(df['step_3'].mean(),2)
+
+    # Error Rates (new definition)
+    errors_bt_1 = df['bt_1'].sum()
+    errors_bt_2 = df['bt_2'].sum()
+    errors_bt_3 = df['bt_3'].sum()
+    total_errors = errors_bt_1 + errors_bt_2 + errors_bt_3
+
+    kpis['error_rate'] = (total_errors / total_visits)
+
+    return kpis
+
+# Function to create a frequency table and proportion table
+def frequency_proportion(df:pd.DataFrame, column :list): 
+    print(f'Frequency:{df[column].value_counts()}') # Frequency table for 'column'
+    print(f'Proportion: {df[column].value_counts(normalize=True)}') # Calculating the proportion of each unique value in the 'column'
+
+
+def cross_table(df:pd.DataFrame, column :list):
+    # Create a cross-tabulation table of the specified column with the count of occurrences
+    my_table = pd.crosstab(index=df[column], columns="count").reset_index()
+    # Remove the column name from the table
+    my_table.columns.name = None
+    # Return the cross-tabulation table
+    return my_table
+
+def key_stats(df:pd.DataFrame, column :list): # Changed to str
+    for col in column:
+        print('Column:', col)
+        print(f'Variance: {df[col].var()}') # Access column directly
+        print(f'std_dev: {df[col].std()}')
+        print(f'min: {df[col].min()}')
+        print(f'max: {df[col].max()}')
+        print(f'range: {df[col].max() - df[col].min()}')
+        print(f'quantiles: {df[col].quantile([0.25, 0.5, 0.75])}')
+        print(f'Skewness: {df[col].skew()}')
+        print(f'Kurtosis: {df[col].kurt()}')
+        print('Median:', df[col].median())
+        print('Mode:', df[col].mode())
+        print('------------------------------------------------')
