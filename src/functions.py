@@ -87,6 +87,48 @@ def key_stats(df:pd.DataFrame, column :list): # Changed to str
         print('Mode:', df[col].mode())
         print('------------------------------------------------')
 
+    
+def convert_data_types_final(df):
+    df['client_id'] = df['client_id'].astype(object)
+    df['visit_visitor_id'] = df['visit_visitor_id'].astype(object)
+    df['start_time'] = round(df['start_time'].astype(float), 2)
+    df['step_1'] = round(df['step_1'].astype(float), 2)
+    df['step_2'] = round(df['step_2'].astype(float), 2)
+    df['step_3'] = round(df['step_3'].astype(float), 2)
+    df['date'] = pd.to_datetime(df['date'])
+    df['bt_1'] = df['bt_1'].fillna(0).astype(int)
+    df['bt_2'] = df['bt_2'].fillna(0).astype(int)
+    df['bt_3'] = df['bt_3'].fillna(0).astype(int)
+    df['total_navigation'] = df['total_navigation'].fillna(0).astype(int)
+    df['last_step'] = df['last_step'].astype(object)
+    df['completion'] = df['completion'].astype(bool)
+    df['total_time_visit'] = round(df['total_time_visit'].astype(float), 2)
+    df['Variation'] = df['Variation'].astype(object)
+    df['clnt_tenure_yr'] = df['clnt_tenure_yr'].astype(int)
+    df['clnt_tenure_mnth'] = df['clnt_tenure_mnth'].astype(int)
+    df['clnt_age'] = df['clnt_age'].astype(int)
+    df['gendr'] = df['gendr'].astype(object)
+    df['num_accts'] = df['num_accts'].astype(int)
+    df['calls_6_mnth'] = df['calls_6_mnth'].astype(int)
+    df['logons_6_mnth'] = df['logons_6_mnth'].astype(int)
+    return df
+
+def convert_data_types_with_hour(df):
+    df['client_id'] = df['client_id'].astype(object)
+    df['visit__id'] = df['visit_id'].astype(object)
+    df['visitor__id'] = df['visitor_id'].astype(object)
+    df['process_step'] = df['process_step'].astype(object)
+    df['date_time'] = pd.to_datetime(df.date_time)
+    df['Variation'] = df['Variation'].astype(object)
+    df['clnt_tenure_yr'] = df['clnt_tenure_yr'].astype(int)
+    df['clnt_tenure_mnth'] = df['clnt_tenure_mnth'].astype(int)
+    df['clnt_age'] = df['clnt_age'].astype(int)
+    df['gendr'] = df['gendr'].astype(object)
+    df['num_accts'] = df['num_accts'].astype(int)
+    df['calls_6_mnth'] = df['calls_6_mnth'].astype(int)
+    df['logons_6_mnth'] = df['logons_6_mnth'].astype(int)
+    return df
+
 def convert_data_types(df):
     df['client_id'] = df['client_id'].astype(object)
     df['visit_visitor_id'] = df['visit_visitor_id'].astype(object)
