@@ -150,7 +150,7 @@ def convert_data_types(df):
     df['last_step'] = df['last_step'].astype(object)
     df['completion'] = df['completion'].astype(bool)
     df['total_time_visit'] = round(df['total_time_visit'].astype(float),2)
-    df['Variation'] = df['Variation'].astype(object)
+    df['variation'] = df['variation'].astype(object)
     df['clnt_tenure_yr'] = df['clnt_tenure_yr'].astype(int)
     df['clnt_tenure_mnth'] = df['clnt_tenure_mnth'].astype(int)
     df['clnt_age'] = df['clnt_age'].astype(int)
