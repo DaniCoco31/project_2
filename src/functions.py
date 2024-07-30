@@ -111,3 +111,17 @@ def convert_data_types(df):
     df['calls_6_mnth'] = df['calls_6_mnth'].astype(int)
     df['logons_6_mnth'] = df['logons_6_mnth'].astype(int)
     return df
+
+# Helper function to convert and round numerical columns
+def convert_round(df, columns, dtype, decimals=2):
+    for column in columns:
+        df[column] = df[column].astype(dtype)
+        if dtype == float:
+            df[column] = round(df[column], decimals)
+    return df
+
+# Helper function to convert columns to a specific dtype
+def convert_dtype(df, columns, dtype):
+    for column in columns:
+        df[column] = df[column].astype(dtype)
+    return df
