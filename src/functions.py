@@ -182,7 +182,7 @@ def convert_data_types_combined(df):
         'step_3': 'float',
         'time_completion': 'float',
         'navigations_bt_start_last': 'int',
-        'completion': 'bool',
+        'completion': 'int',
         'start_step': 'int',
         '1st_step': 'int',
         '2nd_step': 'int',
@@ -227,3 +227,17 @@ def remove_outliers_iqr(df, column):
     lower_bound = Q1 - 1.5 * IQR
     upper_bound = Q3 + 1.5 * IQR
     return df[(df[column] >= lower_bound) & (df[column] <= upper_bound)]
+
+
+# Calculate correlation coefficient and p-value
+def calculate_correlation(df, var1, var2):
+    correlation_coef, p_value = pearsonr(df[var1], df[var2])
+    return correlation_coef, p_value
+
+def plot_distribution(df, variable, title):
+    plt.figure(figsize=(12, 6))
+    sns.histplot(df[variable], kde=False, discrete=True, bins=range(df[variable].max() + 1))
+    plt.title(title)
+    plt.xlabel(variable)
+    plt.ylabel('Frequency')
+    plt.show()
