@@ -241,3 +241,28 @@ def plot_distribution(df, variable, title):
     plt.xlabel(variable)
     plt.ylabel('Frequency')
     plt.show()
+
+    # Function to calculate error rate and completion rate
+def calculate_rates(df):
+    # Sort the dataframe by 'visit_id' and 'date_time'
+    df = df.sort_values(by=['visit_id', 'date_time'])
+    
+    # Calculate the time difference between steps
+    df['time_diff'] = df.groupby('visit_id')['date_time'].diff().dt.total_seconds()
+    
+    # Identify completions (where process step is 'confirm')
+    df['completion'] = df['process_step'] == 'confirm'
+    
+    # Convert 'process_step' to a category type and then to codes for numerical comparison
+    df['process_step_code'] = df['process_step'].astype('category').cat.codes
+    
+    # Identify errors (going back to the previous step in less than 30 seconds)
+    df['error'] = (df['time_diff'] < 30) & (df['process_step_code'].diff() < 0)
+    
+    # Calculate the daily error rate
+    error_rate = df.groupby(df['date_time'].dt.date)['error'].mean()
+    
+    # Calculate the daily completion rate
+    completion_rate = df.groupby(df['date_time'].dt.date)['completion'].mean()
+    
+    return error_rate, completion_rate
