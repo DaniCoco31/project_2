@@ -1,7 +1,959 @@
-#!/usr/bin/env python
+
+import streamlit as st
+
+# Functions from functions.py
+import pandas as pd
+import sys
+import numpy as np
+sys.path.append('../src')
+from functions import *
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import *
+import plotly.express as px
+"""
+To clean the na values of a df
+"""
+def clean_data(df_input : pd.DataFrame):
+    total_rows = df_input.shape[0]
+    threshold = int(total_rows*0.05)
+    na_columns = df_input.isna().sum()
+
+    #print('Checking null values per column:')
+    for column in df_input:
+        na_count = df_input[column].isna().sum()
+        #print(column,na_count)
+        if na_count > threshold:
+            print(f'To many NaN values in column:',column)
+        else:
+            #print(f'Cleaning column:',column)
+            df_input = df_input.dropna(subset=column)
+    
+    return df_input
+    
+def print_clean_data(df_input):
+    print('Before')
+    print(df_input.isna().sum())
+    print('------------------------------------------')
+    df_input = clean_data(df_input)
+    print('------------------------------------------')
+    print('After')
+    print(df_input.isna().sum())
+    return df_input
+
+# Function to calculate KPIs
+def calculate_kpis(df): 
+    kpis = {}
+
+    # Completion Rate
+    total_visits = df['visit_visitor_id'].nunique()
+    completed_visits = df[df['last_step'] == 'confirm']['visit_visitor_id'].nunique()
+    kpis['completion_rate'] = completed_visits / total_visits
+
+    # Time Spent on Each Step
+    kpis['avg_start_time'] = df['start_time'].mean()
+    kpis['avg_step_1_time'] = round(df['step_1'].mean(),2)
+    kpis['avg_step_2_time'] = round(df['step_2'].mean(),2)
+    kpis['avg_step_3_time'] = round(df['step_3'].mean(),2)
+
+    # Error Rates (new definition)
+    errors_1st_step = df['1st_step'].sum()
+    errors_2nd_step = df['2nd_step'].sum()
+    errors_3rd_step = df['3rd_step'].sum()
+    total_errors = errors_1st_step + errors_2nd_step + errors_3rd_step
+
+
+    kpis['error_rate'] = (total_errors / total_visits)
+
+    return kpis
+
+# Function to create a frequency table and proportion table
+def frequency_proportion(df:pd.DataFrame, column :list): 
+    print(f'Frequency:{df[column].value_counts()}') # Frequency table for 'column'
+    print(f'Proportion: {df[column].value_counts(normalize=True)}') # Calculating the proportion of each unique value in the 'column'
+
+
+def cross_table(df:pd.DataFrame, column :list):
+    # Create a cross-tabulation table of the specified column with the count of occurrences
+    my_table = pd.crosstab(index=df[column], columns="count").reset_index()
+    # Remove the column name from the table
+    my_table.columns.name = None
+    # Return the cross-tabulation table
+    return my_table
+
+def key_stats(df:pd.DataFrame, column :list): # Changed to str
+    for col in column:
+        print('Column:', col)
+        print(f'Variance: {df[col].var()}') # Access column directly
+        print(f'std_dev: {df[col].std()}')
+        print(f'min: {df[col].min()}')
+        print(f'max: {df[col].max()}')
+        print(f'range: {df[col].max() - df[col].min()}')
+        print(f'quantiles: {df[col].quantile([0.25, 0.5, 0.75])}')
+        print(f'Skewness: {df[col].skew()}')
+        print(f'Kurtosis: {df[col].kurt()}')
+        print('Median:', df[col].median())
+        print('Mode:', df[col].mode())
+        print('------------------------------------------------')
+
+
+
+# Function to convert data types for df_test_final
+def convert_data_types_final(df):
+    df['client_id'] = df['client_id'].astype(object)
+    df['visit_visitor_id'] = df['visit_visitor_id'].astype(object)
+    df['start_time'] = round(df['start_time'].astype(float), 2)
+    df['step_1'] = round(df['step_1'].astype(float), 2)
+    df['step_2'] = round(df['step_2'].astype(float), 2)
+    df['step_3'] = round(df['step_3'].astype(float), 2)
+    df['time_completion'] = round(df['time_completion'].astype(float), 2)
+    df['navigations_bt_start_last'] = df['navigations_bt_start_last'].fillna(0).astype(int)
+    df['completion'] = df['completion'].astype(bool)
+    df['start_step'] = df['start_step'].astype(int)
+    df['1st_step'] = df['1st_step'].fillna(0).astype(int)
+    df['2nd_step'] = df['2nd_step'].fillna(0).astype(int)
+    df['3rd_step'] = df['3rd_step'].fillna(0).astype(int)
+    df['last_step'] = df['last_step'].astype(object)
+    df['total_time_visit'] = round(df['total_time_visit'].astype(float), 2)
+    df['variation'] = df['variation'].astype(object)
+    df['clnt_tenure_yr'] = df['clnt_tenure_yr'].astype(int)
+    df['clnt_tenure_mnth'] = df['clnt_tenure_mnth'].astype(int)
+    df['clnt_age'] = df['clnt_age'].astype(int)
+    df['gendr'] = df['gendr'].astype(object)
+    df['bal'] = round(df['bal'].astype(float), 2)
+    df['num_accts'] = df['num_accts'].astype(int)
+    df['calls_6_mnth'] = df['calls_6_mnth'].astype(int)
+    df['logons_6_mnth'] = df['logons_6_mnth'].astype(int)
+    df['date'] = pd.to_datetime(df['date'])
+    df['initial_date'] = pd.to_datetime(df['initial_date'])
+    df['final_date'] = pd.to_datetime(df['final_date'])
+    return df
+
+# Function to convert data types for df_test and df_control with date and time
+def convert_data_types_with_hour(df):
+    df['client_id'] = df['client_id'].astype(object)
+    df['visit_id'] = df['visit_id'].astype(object)
+    df['visitor_id'] = df['visitor_id'].astype(object)
+    df['process_step'] = df['process_step'].astype(object)
+    df['date_time'] = pd.to_datetime(df['date_time'])
+    df['Variation'] = df['Variation'].astype(object)
+    df['clnt_tenure_yr'] = df['clnt_tenure_yr'].astype(int)
+    df['clnt_tenure_mnth'] = df['clnt_tenure_mnth'].astype(int)
+    df['clnt_age'] = df['clnt_age'].astype(int)
+    df['gendr'] = df['gendr'].astype(object)
+    df['num_accts'] = df['num_accts'].astype(int)
+    df['calls_6_mnth'] = df['calls_6_mnth'].astype(int)
+    df['logons_6_mnth'] = df['logons_6_mnth'].astype(int)
+    return df
+
+# Function to convert data types for generic data frame
+def convert_data_types(df):
+    df['client_id'] = df['client_id'].astype(object)
+    df['visit_visitor_id'] = df['visit_visitor_id'].astype(object)
+    df['start_time'] = round(df['start_time'].astype(float), 2)
+    df['step_1'] = round(df['step_1'].astype(float), 2)
+    df['step_2'] = round(df['step_2'].astype(float), 2)
+    df['step_3'] = round(df['step_3'].astype(float), 2)
+    df['date'] = pd.to_datetime(df['date'])
+    df['1st_step'] = df['1st_step'].fillna(0).astype(int)
+    df['2nd_step'] = df['2nd_step'].fillna(0).astype(int)
+    df['3rd_step'] = df['3rd_step'].fillna(0).astype(int)
+    df['navigations_bt_start_last'] = df['navigations_bt_start_last'].fillna(0).astype(int)
+    df['last_step'] = df['last_step'].astype(object)
+    df['completion'] = df['completion'].astype(bool)
+    df['total_time_visit'] = round(df['total_time_visit'].astype(float), 2)
+    df['variation'] = df['variation'].astype(object)
+    df['clnt_tenure_yr'] = df['clnt_tenure_yr'].astype(int)
+    df['clnt_tenure_mnth'] = df['clnt_tenure_mnth'].astype(int)
+    df['clnt_age'] = df['clnt_age'].astype(int)
+    df['gendr'] = df['gendr'].astype(object)
+    df['num_accts'] = df['num_accts'].astype(int)
+    df['calls_6_mnth'] = df['calls_6_mnth'].astype(int)
+    df['logons_6_mnth'] = df['logons_6_mnth'].astype(int)
+    return df
+
+
+def convert_data_types_combined(df):
+    column_type_mappings = {
+        'client_id': 'object',
+        'visit_visitor_id': 'object',
+        'visit_id': 'object',
+        'visitor_id': 'object',
+        'process_step': 'object',
+        'start_time': 'float',
+        'step_1': 'float',
+        'step_2': 'float',
+        'step_3': 'float',
+        'time_completion': 'float',
+        'navigations_bt_start_last': 'int',
+        'completion': 'int',
+        'start_step': 'int',
+        '1st_step': 'int',
+        '2nd_step': 'int',
+        '3rd_step': 'int',
+        'last_step': 'object',
+        'total_time_visit': 'float',
+        'variation': 'object',
+        'clnt_tenure_yr': 'int',
+        'clnt_tenure_mnth': 'int',
+        'clnt_age': 'int',
+        'gendr': 'object',
+        'bal': 'float',
+        'num_accts': 'int',
+        'calls_6_mnth': 'int',
+        'logons_6_mnth': 'int',
+        'date': 'datetime64[ns]',
+        'initial_date': 'datetime64[ns]',
+        'final_date': 'datetime64[ns]',
+        'date_time': 'datetime64[ns]',
+    }
+
+    missing_columns = []
+
+    for column, dtype in column_type_mappings.items():
+        if column in df.columns:
+            if dtype == 'float':
+                df[column] = round(df[column].astype(dtype), 2)
+            elif dtype == 'int':
+                df[column] = df[column].fillna(0).astype(dtype)
+            elif dtype == 'datetime64[ns]':
+                df[column] = pd.to_datetime(df[column])
+            else:
+                df[column] = df[column].astype(dtype)
+    return df
+
+
+
+def remove_outliers_iqr(df, column):
+    Q1 = df[column].quantile(0.25)
+    Q3 = df[column].quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    return df[(df[column] >= lower_bound) & (df[column] <= upper_bound)]
+
+
+# Calculate correlation coefficient and p-value
+def calculate_correlation(df, var1, var2):
+    correlation_coef, p_value = pearsonr(df[var1], df[var2])
+    return correlation_coef, p_value
+
+def plot_distribution(df, variable, title):
+    plt.figure(figsize=(12, 6))
+    sns.histplot(df[variable], kde=False, discrete=True, bins=range(df[variable].max() + 1))
+    plt.title(title)
+    plt.xlabel(variable)
+    plt.ylabel('Frequency')
+    plt.show()
+
+    # Function to calculate error rate and completion rate
+def calculate_rates(df):
+    # Sort the dataframe by 'visit_id' and 'date_time'
+    df = df.sort_values(by=['visit_id', 'date_time'])
+    
+    # Calculate the time difference between steps
+    df['time_diff'] = df.groupby('visit_id')['date_time'].diff().dt.total_seconds()
+    
+    # Identify completions (where process step is 'confirm')
+    df['completion'] = df['process_step'] == 'confirm'
+    
+    # Convert 'process_step' to a category type and then to codes for numerical comparison
+    df['process_step_code'] = df['process_step'].astype('category').cat.codes
+    
+    # Identify errors (going back to the previous step in less than 30 seconds)
+    df['error'] = (df['time_diff'] < 30) & (df['process_step_code'].diff() < 0)
+    
+    # Calculate the daily error rate
+    error_rate = df.groupby(df['date_time'].dt.date)['error'].mean()
+    
+    # Calculate the daily completion rate
+    completion_rate = df.groupby(df['date_time'].dt.date)['completion'].mean()
+    
+    return error_rate, completion_rate
+
+
+def main():
+    st.title("Data Analysis App")
+
+    # Data Cleaning
+    st.header("Data Cleaning")
+    #!/usr/bin/env python
 # coding: utf-8
 
+# In[1]:
+
+
+import pandas as pd
+import sys
+import numpy as np
+sys.path.append('../src')
+from functions import *
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import *
+
+
+# # Loading the Data:
+
+# In[2]:
+
+
+df_clients_profile = pd.read_csv('../Data/Raw/df_final_demo.txt')
+df_web_data_1 = pd.read_csv('../Data/Raw/df_final_web_data_pt_1.txt')
+df_web_data_2 = pd.read_csv('../Data/Raw/df_final_web_data_pt_2.txt')
+df_experiment_clients = pd.read_csv('../Data/Raw/df_final_experiment_clients.txt')
+pd.set_option('display.max_columns', None) # To display all columns
+df_web_data = pd.concat([df_web_data_1, df_web_data_2], ignore_index= True)
+
+
+# # Exploratory Data Analysis (EDA):
+
+# ## Initial Exploration
+
+# In[3]:
+
+
+df_clients_profile.head(10)
+
+
+# In[4]:
+
+
+df_clients_profile.shape
+
+
+# In[5]:
+
+
+df_experiment_clients.head(10)
+
+
+# In[6]:
+
+
+df_experiment_clients.shape
+
+
+# In[7]:
+
+
+df_web_data.head(10)
+
+
+# In[8]:
+
+
+df_web_data.shape
+
+
+# ### Exploring numerical and categorical variables
+
+# In[9]:
+
+
+# Retrieving the unique data types present in the dataframe columns
+df_clients_profile.info()
+
+
+# In[10]:
+
+
+df_experiment_clients.info()
+
+
+# In[11]:
+
+
+df_web_data.info()
+
+
+# In[12]:
+
+
+# Extracting column names with numerical data types from the dataframe
+numerical_columns_profile = df_clients_profile.select_dtypes(include=[np.number]).columns
+print(numerical_columns_profile)
+
+
+# In[13]:
+
+
+# Extracting column names with numerical data types from the dataframe
+numerical_columns_web = df_web_data.select_dtypes(include=[np.number]).columns
+print(numerical_columns_web)
+
+
+# In[14]:
+
+
+# Extracting column names with numerical data types from the dataframe
+numerical_columns_exp_cli = df_web_data.select_dtypes(include=[np.number]).columns
+print(numerical_columns_exp_cli)
+
+
+# In[15]:
+
+
+# Separating between discrete and continuous variables, as discrete ones could potentially be treated as categorical.
+# Remember to adjust the threshold (in this case, < 20) based on your dataset's specific characteristics and domain knowledge.
+potential_categorical_from_numerical_profile = df_clients_profile.select_dtypes("number").loc[:, df_clients_profile.select_dtypes("number").nunique() < 5]
+potential_categorical_from_numerical_profile
+
+
+# In[16]:
+
+
+# Separating between discrete and continuous variables, as discrete ones could potentially be treated as categorical.
+# Remember to adjust the threshold (in this case, < 20) based on your dataset's specific characteristics and domain knowledge.
+potential_categorical_from_numerical_web= df_web_data.select_dtypes("number").loc[:, df_web_data.select_dtypes("number").nunique() < 5]
+potential_categorical_from_numerical_web
+
+
+# In[17]:
+
+
+# Separating between discrete and continuous variables, as discrete ones could potentially be treated as categorical.
+# Remember to adjust the threshold (in this case, < 20) based on your dataset's specific characteristics and domain knowledge.
+potential_categorical_from_numerical_exp_cli= df_experiment_clients.select_dtypes("number").loc[:, df_experiment_clients.select_dtypes("number").nunique() < 5]
+potential_categorical_from_numerical_exp_cli
+
+
+# In[18]:
+
+
+# Retrieving column names with object (typically string) data types from the dataframe
+df_clients_profile.select_dtypes("object").columns
+
+
+# In[19]:
+
+
+# Retrieving column names with object (typically string) data types from the dataframe
+df_web_data.select_dtypes("object").columns
+
+
+# In[20]:
+
+
+# Retrieving column names with object (typically string) data types from the dataframe
+df_experiment_clients.select_dtypes("object").columns
+
+
+# In[21]:
+
+
+df_clients_profile.columns
+
+
+# In[22]:
+
+
+df_clients_profile['gendr'] = df_clients_profile['gendr'].replace(['U', 'X'], 'Other')
+
+
+# ## Drop duplicates values
+
+# In[23]:
+
+
+#clean df_clients_profile
+df_clients_profile = print_clean_data(df_clients_profile)
+
+
+# In[24]:
+
+
+#clean df_experiment_clients
+df_experiment_clients = print_clean_data(df_experiment_clients)
+
+
+# In[25]:
+
+
+#clean df_web_data
+df_web_data = print_clean_data(df_web_data)
+
+
+# In[26]:
+
+
+df_web_data.head(20)
+
+
+# # Data Typing/Formatting
+
+# In[27]:
+
+
+df_clients_profile.head(10)
+
+
+# In[28]:
+
+
+df_clients_profile.dtypes
+
+
+# In[29]:
+
+
+df_experiment_clients.dtypes
+
+
+# In[30]:
+
+
+df_web_data.dtypes
+
+
+# In[31]:
+
+
+df_web_data['date_time'] = pd.to_datetime(df_web_data['date_time'], format='%Y-%m-%d %H:%M:%S')
+
+
+# In[32]:
+
+
+df_web_data.dtypes
+
+
+# In[33]:
+
+
+# Convert specified columns to integer data type
+df_clients_profile['clnt_tenure_yr'] = df_clients_profile['clnt_tenure_yr'].astype(int)
+df_clients_profile['clnt_tenure_mnth'] = df_clients_profile['clnt_tenure_mnth'].astype(int)
+df_clients_profile['clnt_age'] = df_clients_profile['clnt_age'].astype(int)
+df_clients_profile['num_accts'] = df_clients_profile['num_accts'].astype(int)
+df_clients_profile['calls_6_mnth'] = df_clients_profile['calls_6_mnth'].astype(int)
+df_clients_profile['logons_6_mnth'] = df_clients_profile['logons_6_mnth'].astype(int)
+
+
+# In[34]:
+
+
+df_clients_profile.dtypes
+
+
+# ## Create a data frame with the clients that won't participe in the experiment.
+
+# In[35]:
+
+
+#setting aside the clients that wont be part if the experiment
+null_df_experiment_clients = df_experiment_clients[df_experiment_clients['Variation'].isnull()]
+null_df_experiment_clients
+
+
+# ## Merge the clients in the web data
+
+# # df_test
+# ### Identify the clients part of the test group
+
+# In[36]:
+
+
+#id of clients that are part of the test
+df_experiment_clients_Test = df_experiment_clients[df_experiment_clients['Variation'] == 'Test']
+df_experiment_clients_Test.head(10)
+
+
+# ### df_test: combine visit_id with visitor_id and reoganize the columns.
+
+# In[37]:
+
+
+final_df_test = pd.merge(df_experiment_clients_Test, df_clients_profile, on='client_id', how='inner')
+final_df_test = pd.merge(df_web_data, final_df_test, on='client_id', how='inner')
+df_test = final_df_test
+df_test.head(15)
+
+
+# ### Create the csv file to df_test
+
+# In[38]:
+
+
+df_test.to_csv('../Data/Cleaned_Data/df_test.csv', index=False)
+
+
+# # df_control
+# ### Identify the clients part of the control group
+
+# In[39]:
+
+
+#id of clients that are part of the test
+df_experiment_clients_control = df_experiment_clients[df_experiment_clients['Variation'] == 'Control']
+df_experiment_clients_control.head(10)
+
+
+# ### df_control: combine visit_id with visitor_id and reoganize the columns.
+
+# In[40]:
+
+
+final_df_control = pd.merge(df_experiment_clients_control, df_clients_profile, on='client_id', how='inner')
+final_df_control = pd.merge(df_web_data, final_df_control, on='client_id', how='inner')
+df_control = final_df_control
+df_control.head(15)
+
+
+# ### Create the csv file to df_control
+
+# In[41]:
+
+
+df_control.to_csv('../Data/Cleaned_Data/df_control.csv', index=False)
+
+
+# # df_combine
+
+# # Combine df_test and df_control
+
+# In[42]:
+
+
+df_combined = pd.concat([df_test, df_control]).reset_index(drop=True)
+df_combined.to_csv('../Data/Cleaned_Data/df_combined.csv', index=False)
+
+
+# # Pivot and create new columns
+
+# # df_test to df_test_final
+
+# In[43]:
+
+
+df_test.head(2)
+
+
+# In[44]:
+
+
+# Assuming df_control is your DataFrame
+# 1. Data Preparation:
+df_test['date_time'] = pd.to_datetime(df_test['date_time'])
+df_test['date'] = df_test['date_time'].dt.date
+df_test['visit_visitor_id'] = df_test['visit_id'].astype(str) + "_" + df_test['visitor_id'].astype(str)
+
+
+# In[45]:
+
+
+# 2. Calculate time differences per step and make them positive:
+df_test = df_test.sort_values(by=['visit_id', 'client_id', 'date_time'])
+df_test['next_date_time'] = df_test.groupby(['visit_id', 'client_id'])['date_time'].shift(-1)
+df_test['time_diff_seconds'] = (df_test['next_date_time'] - df_test['date_time']).dt.total_seconds()
+df_test['time_diff_minutes'] = df_test['time_diff_seconds'] / 60
+
+# Get Last Step:
+last_step_df = df_test.groupby('visit_visitor_id')['process_step'].last().reset_index()
+last_step_df = last_step_df.rename(columns={'process_step': 'last_step'})
+
+
+# In[46]:
+
+
+# 3. Calculate the number of steps per visit:
+df_test = pd.concat([df_test, pd.get_dummies(df_test['process_step'], prefix='count')], axis=1)
+df_steps_sum = df_test.groupby(by=['client_id', 'visit_id', 'visitor_id'])[['count_confirm', 
+'count_start', 'count_step_1', 'count_step_2', 'count_step_3']].agg('sum')
+
+
+# In[47]:
+
+
+# 4. Pivot the table to have one row per visit:
+df_pivot = df_test.pivot_table(index=['client_id', 'visitor_id', 'visit_id'], columns='process_step', values='time_diff_minutes', fill_value=0, aggfunc='sum')
+df_pivot = df_pivot.reset_index()
+df_pivot.columns.name = None
+test_time_counts = pd.merge(df_pivot, df_steps_sum, on=['client_id', 'visitor_id', 'visit_id'])
+
+
+# In[48]:
+
+
+# 5. Merge the data with the clients' profile and get initial and final dates:
+final_df_Test = pd.merge(test_time_counts, df_experiment_clients_Test, on='client_id', how='inner')
+final_df_Test = pd.merge(final_df_Test, df_clients_profile, on='client_id', how='inner')
+
+df_test_date = df_web_data.groupby(by = ['client_id', 'visit_id', 'visitor_id']).agg({'date_time': ['min', 'max']})
+df_test_date.columns = [''.join(col).strip() if isinstance(col, tuple) else col for col in df_test_date.columns]
+final_df_Test = pd.merge(df_test_date, final_df_Test, on=['client_id', 'visit_id', 'visitor_id'], how='inner')
+
+# Ensure visit_visitor_id exists in final_df_Test for the merge:
+final_df_Test['visit_visitor_id'] = final_df_Test['visit_id'].astype(str) + "_" + final_df_Test['visitor_id'].astype(str)  
+
+# Calculate total time spent in the website:
+final_df_Test['total_time_visit'] = (final_df_Test['date_timemax'] - final_df_Test['date_timemin']).dt.total_seconds() / 60
+
+# Merge with last_step_df:
+final_df_Test = pd.merge(final_df_Test, last_step_df, on='visit_visitor_id', how='left')
+
+# Extract the date from date_timemax into a new column called date
+final_df_Test['date'] = final_df_Test['date_timemax'].dt.date
+
+# Remove unnecessary columns 
+final_df_Test = final_df_Test.drop(columns=['visit_id', 'visitor_id'])
+
+# Rename columns:
+final_df_Test = final_df_Test.rename(columns={
+    'date_timemin': 'initial_date', 
+    'date_timemax': 'final_date', 
+    'start': 'start_time', 
+    'confirm': 'time_completion', 
+    'count_confirm': 'completion',
+    'count_start': 'start_step', 
+    'count_step_1': '1st_step', 
+    'count_step_2': '2nd_step', 
+    'count_step_3': '3rd_step',
+    'Variation': 'variation'
+})
+
+# Total navigations between start and last step (including start and last):
+final_df_Test['navigations_bt_start_last'] = final_df_Test.apply(
+    lambda row: row['start_step'] + row['1st_step'] + row['2nd_step'] + row['3rd_step'] + 1, 
+    axis=1
+)
+
+
+# In[49]:
+
+
+# 6. Create the final order of columns:
+new_order = ['client_id', 'visit_visitor_id', 'start_time', 'step_1', 'step_2', 'step_3', 'time_completion', 'navigations_bt_start_last', 
+             'completion', 'start_step', '1st_step', '2nd_step', '3rd_step', 'last_step', 'variation', 'clnt_tenure_yr', 'clnt_tenure_mnth', 
+             'clnt_age', 'gendr', 'num_accts', 'bal', 'calls_6_mnth', 'logons_6_mnth', 'date', 'initial_date', 'total_time_visit', 'final_date']
+df_test_final = final_df_Test[new_order]
+
+# Save the final DataFrame to CSV
+df_test_final.to_csv('../Data/Cleaned_Data/df_test_final.csv', index=False)
+
+# Convert data types if necessary
+df_test_final = convert_data_types_final(df_test_final)
+df_test_final.dtypes
+
+
+# In[50]:
+
+
+df_test_final.to_csv('../Data/Cleaned_Data/df_test_final.csv', index=False)
+
+
+# In[51]:
+
+
+df_test_final = convert_data_types_final(df_test_final)
+
+
+# In[52]:
+
+
+df_test_final.dtypes
+
+
+# ### Create the csv file to df_test_final
+
+# # df_control to df_control_final
+
+# In[53]:
+
+
+# 1. Data Preparation
+df_control['date_time'] = pd.to_datetime(df_control['date_time'])
+df_control['date'] = df_control['date_time'].dt.date
+df_control['visit_visitor_id'] = df_control['visit_id'].astype(str) + "_" + df_control['visitor_id'].astype(str)
+
+
+# In[54]:
+
+
+# 2. Calculate time differences per step and make them positive:
+df_control = df_control.sort_values(by=['visit_id', 'client_id', 'date_time'])
+df_control['next_date_time'] = df_control.groupby(['visit_id', 'client_id'])['date_time'].shift(-1)
+df_control['time_diff_seconds'] = (df_control['next_date_time'] - df_control['date_time']).dt.total_seconds()
+df_control['time_diff_minutes'] = df_control['time_diff_seconds'] / 60
+
+
+# In[55]:
+
+
+# Assuming df_control is your DataFrame
+df_control['visit_visitor_id'] = df_control['visit_id'] + '_' + df_control['visitor_id']
+
+# Sort the DataFrame by 'unique_id' and 'date_time'
+df_control_sorted = df_control.sort_values(by=['visit_visitor_id', 'date_time'])
+
+# Get the last row for each 'unique_id'
+df_last_step = df_control_sorted.groupby('visit_visitor_id').last().reset_index()
+df_last_step = df_last_step.rename(columns={'process_step': 'last_step'})
+# Select only the necessary columns (optional)
+df_last_step = df_last_step[['visit_visitor_id', 'last_step']]
+
+
+# In[56]:
+
+
+# 3. Calculate the number of steps per visit:
+df_control = pd.concat([df_control, pd.get_dummies(df_control['process_step'], prefix='count')], axis=1)
+df_steps_sum_control = df_control.groupby(by=['client_id', 'visit_id', 'visitor_id'])[['count_confirm', 
+'count_start', 'count_step_1', 'count_step_2', 'count_step_3']].agg('sum')
+
+
+# In[57]:
+
+
+# 4. Pivot the table to have one row per visit:
+df_pivot_control = df_control.pivot_table(index=['client_id', 'visitor_id', 'visit_id'], columns='process_step', values='time_diff_minutes', fill_value=0, aggfunc='sum')
+df_pivot_control = df_pivot_control.reset_index()
+df_pivot_control.columns.name = None
+control_time_counts = pd.merge(df_pivot_control, df_steps_sum_control, on=['client_id', 'visitor_id', 'visit_id'])
+
+
+# In[58]:
+
+
+# 4. Pivot the table to have one row per visit:
+df_pivot_control = df_control.pivot_table(index=['client_id', 'visitor_id', 'visit_id'], columns='process_step', values='time_diff_minutes', fill_value=0, aggfunc='sum')
+df_pivot_control = df_pivot_control.reset_index()
+df_pivot_control.columns.name = None
+control_time_counts = pd.merge(df_pivot_control, df_steps_sum_control, on=['client_id', 'visitor_id', 'visit_id'])
+
+
+# In[59]:
+
+
+# 5. Merge the data with the clients' profile and get initial and final dates:
+final_df_Control = pd.merge(control_time_counts, df_experiment_clients, on='client_id', how='inner')
+final_df_Control = pd.merge(final_df_Control, df_clients_profile, on='client_id', how='inner')
+
+df_control_date = df_web_data.groupby(by = ['client_id', 'visit_id', 'visitor_id']).agg({'date_time': ['min', 'max']})
+df_control_date.columns = [''.join(col).strip() if isinstance(col, tuple) else col for col in df_control_date.columns]
+final_df_Control = pd.merge(df_control_date, final_df_Control, on=['client_id', 'visit_id', 'visitor_id'], how='inner')
+
+# Ensure visit_visitor_id exists in final_df_Control for the merge:
+final_df_Control['visit_visitor_id'] = final_df_Control['visit_id'].astype(str) + "_" + final_df_Control['visitor_id'].astype(str)  
+
+# Calculate total time spent in the website:
+final_df_Control['total_time_visit'] = (final_df_Control['date_timemax'] - final_df_Control['date_timemin']).dt.total_seconds() / 60
+
+# Add the last step to the control_time_counts DataFrame
+# df_control_final = pd.concat([last_step_df_control, df_pivot_control], axis=1)
+# Merge with last_step_df_control:
+final_df_Control = pd.merge(final_df_Control, df_last_step, on=['visit_visitor_id'], how='left')
+
+# Extract the date from date_timemax into a new column called date
+final_df_Control['date'] = final_df_Control['date_timemax'].dt.date
+
+# Remove unnecessary columns 
+final_df_Control = final_df_Control.drop(columns=['visit_id', 'visitor_id'])
+
+# Rename columns:
+final_df_Control = final_df_Control.rename(columns={
+    'date_timemin': 'initial_date', 
+    'date_timemax': 'final_date', 
+    'start': 'start_time', 
+    'confirm': 'time_completion', 
+    'count_confirm': 'completion',
+    'count_start': 'start_step', 
+    'count_step_1': '1st_step', 
+    'count_step_2': '2nd_step', 
+    'count_step_3': '3rd_step',
+    'Variation': 'variation'
+})
+
+# Total navigations between start and last step (including start and last):
+final_df_Control['navigations_bt_start_last'] = final_df_Control['start_step'] + final_df_Control['1st_step'] + final_df_Control['2nd_step'] + final_df_Control['3rd_step'] + 1
+
+
+# In[60]:
+
+
+# 6. Create the final order of columns:
+new_order_control = ['client_id', 'visit_visitor_id', 'start_time', 'step_1', 'step_2', 'step_3', 'time_completion', 'navigations_bt_start_last', 
+                    'completion', 'start_step', '1st_step', '2nd_step', '3rd_step', 'last_step', 'variation', 'clnt_tenure_yr', 'clnt_tenure_mnth', 
+                    'clnt_age', 'gendr', 'num_accts', 'bal', 'calls_6_mnth', 'logons_6_mnth', 'date', 'initial_date', 'total_time_visit', 'final_date']
+df_control_final = final_df_Control[new_order_control]
+
+# Save the final DataFrame to CSV
+df_control_final.to_csv('../Data/Cleaned_Data/df_control_final.csv', index=False)
+
+# Convert data types if necessary
+df_control_final = convert_data_types_final(df_control_final)
+
+
+# # New Data Frames
+
+# ## df_control_final
+
+# In[61]:
+
+
+df_control_final.head(10)
+
+
+# ## df_test_final
+
+# In[62]:
+
+
+df_test_final.head(10)
+
+
+# # df_final
+# ### Create the csv file to combine_df
+
+# In[63]:
+
+
+df_final = pd.concat([df_test_final, df_control_final], ignore_index=True)
+
+
+# In[64]:
+
+
+df_final = convert_data_types(df_final)
+
+
+# In[65]:
+
+
+df_final.to_csv('../Data/Cleaned_Data/df_final.csv', index=False)
+
+
+# In[66]:
+
+
+df_final.sample(15)
+
+
+# In[67]:
+
+
+df_combined.columns 
+
+
+# In[68]:
+
+
+df_test
+
+
 # In[ ]:
+
+
+
+
+
+
+    # Univariate Analysis
+    st.header("Univariate Analysis")
+    #!/usr/bin/env python
+# coding: utf-8
+
+# In[18]:
 
 
 import pandas as pd
@@ -14,7 +966,7 @@ from scipy.stats import ttest_ind
 from sklearn.preprocessing import StandardScaler
 
 
-# In[ ]:
+# In[19]:
 
 
 import pandas as pd
@@ -38,7 +990,7 @@ pd.set_option('display.max_columns', None)
 df_web_data = pd.concat([df_web_data_1, df_web_data_2], ignore_index= True)
 
 
-# In[ ]:
+# In[20]:
 
 
 df_test = convert_data_types_combined(df_test)
@@ -51,7 +1003,7 @@ df_combined = convert_data_types_combined(df_combined)
 
 # # Loading the Data
 
-# In[ ]:
+# In[21]:
 
 
 df_test_final = pd.read_csv('../Data/Cleaned_Data/df_test_final.csv')
@@ -63,7 +1015,7 @@ pd.set_option('display.max_columns', None)
 
 # ## Check the data types
 
-# In[ ]:
+# In[22]:
 
 
 df_control_final.dtypes
@@ -71,58 +1023,58 @@ df_control_final.dtypes
 
 # ## Categorical columns
 
-# In[ ]:
+# In[23]:
 
 
 df_control_final
 
 
-# In[ ]:
+# In[24]:
 
 
 # Extracting column names with numerical data types from the dataframe
 df_control_final.select_dtypes("object").columns
 
 
-# In[ ]:
+# In[25]:
 
 
 test_categorical_columns = ['last_step', 'gendr',]
 
 
-# In[ ]:
+# In[26]:
 
 
 # Extracting column names with numerical data types from the dataframe
 df_control_final.select_dtypes("object").nunique().sort_values(ascending=False)
 
 
-# In[ ]:
+# In[27]:
 
 
 frequency_proportion(df_control_final, 'last_step')
 
 
-# In[ ]:
+# In[28]:
 
 
 frequency_proportion(df_control_final, 'gendr')
 
 
-# In[ ]:
+# In[29]:
 
 
 tab_control_last_step = cross_table(df_control_final, 'last_step')
 tab_control_last_step
 
 
-# In[ ]:
+# In[30]:
 
 
 df_control_final['last_step'].value_counts()
 
 
-# In[ ]:
+# In[31]:
 
 
 tab_control_last_step = df_control_final['last_step'].value_counts().reset_index()
@@ -130,7 +1082,7 @@ tab_control_last_step.columns = ['last_step', 'count']
 tab_control_last_step
 
 
-# In[ ]:
+# In[32]:
 
 
 import matplotlib.pyplot as plt
@@ -146,21 +1098,21 @@ plt.title('Last Step Distribution in Control Group')
 plt.show()
 
 
-# In[ ]:
+# In[33]:
 
 
 tab_control_gender = cross_table(df_control_final, 'gendr')
 tab_control_gender
 
 
-# In[ ]:
+# In[34]:
 
 
 # Calculating the proportions for each value in 'tab_test_last_step' and rounding the results to two decimal places
 (tab_control_gender['count'] / tab_control_gender['count'].sum()).round(2)
 
 
-# In[ ]:
+# In[35]:
 
 
 tab_control_gender.plot.pie(y='count', labels=tab_control_gender['gendr'], autopct='%1.1f%%')
@@ -175,7 +1127,7 @@ plt.show()
 
 # ### Centrality and Dispersion Measures
 
-# In[ ]:
+# In[36]:
 
 
 # Extracting column names with numerical data types from the dataframe
@@ -184,13 +1136,13 @@ print(control_numerical_columns)
 print(df_control_final.dtypes)
 
 
-# In[ ]:
+# In[37]:
 
 
 control_numerical_columns = pd.DataFrame
 
 
-# In[ ]:
+# In[38]:
 
 
 control_numerical_columns = ['start_time', 'step_1', 'step_2', 'step_3', 'time_completion',
@@ -201,34 +1153,34 @@ control_numerical_columns = ['start_time', 'step_1', 'step_2', 'step_3', 'time_c
 print(control_numerical_columns)
 
 
-# In[ ]:
+# In[39]:
 
 
 # Extracting column names with numerical data types from the dataframe
 df_control_final.select_dtypes("number").nunique().sort_values(ascending=False)
 
 
-# In[ ]:
+# In[40]:
 
 
 df_control_final.describe()
 
 
-# In[ ]:
+# In[41]:
 
 
 # Filtering the numerical columns for analysis
 df_numerical_control = pd.DataFrame(df_control_final[control_numerical_columns])
 
 
-# In[ ]:
+# In[42]:
 
 
 # Plotting histograms for the numerical columns before removing outliers
 df_numerical_control.hist(figsize=(15, 20), bins=60, xlabelsize=1, ylabelsize=10);
 
 
-# In[ ]:
+# In[43]:
 
 
 # Applying IQR method to each specified column
@@ -237,14 +1189,14 @@ for column in control_numerical_columns:
     df_numerical_control = pd.DataFrame(df_control_final[control_numerical_columns])
 
 
-# In[ ]:
+# In[44]:
 
 
 # Plotting histograms for the numerical columns after removing outliers
 df_numerical_control.hist(figsize=(15, 20), bins=60, xlabelsize=10, ylabelsize=10);
 
 
-# In[ ]:
+# In[45]:
 
 
 # List of columns to apply log transformation
@@ -270,7 +1222,7 @@ df_numerical_control = pd.DataFrame(df_control_final[control_numerical_columns])
 df_numerical_control.hist(figsize=(15, 20), bins=60, xlabelsize=10, ylabelsize=10);
 
 
-# In[ ]:
+# In[46]:
 
 
 df_control_final.to_csv('../Data/Cleaned_Data/df_control_final.csv', index=False)  
@@ -282,7 +1234,7 @@ df_control_final.to_csv('../Data/Cleaned_Data/df_control_final.csv', index=False
 
 # ## Univariate Analysis - df_test
 
-# In[ ]:
+# In[47]:
 
 
 df_test_final = convert_data_types_final(df_test_final)
@@ -290,57 +1242,57 @@ df_test_final = convert_data_types_final(df_test_final)
 
 # ## Categorical columns
 
-# In[ ]:
+# In[48]:
 
 
 # Extracting column names with numerical data types from the dataframe
 df_test_final.select_dtypes("object").columns
 
 
-# In[ ]:
+# In[49]:
 
 
 test_categorical_columns = ['last_step', 'gendr']
 
 
-# In[ ]:
+# In[50]:
 
 
 # Extracting column names with numerical data types from the dataframe
 df_test_final.select_dtypes("object").nunique().sort_values(ascending=False)
 
 
-# In[ ]:
+# In[51]:
 
 
 frequency_proportion(df_test_final, 'last_step')
 
 
-# In[ ]:
+# In[52]:
 
 
 frequency_proportion(df_test_final, 'gendr')
 
 
-# In[ ]:
+# In[53]:
 
 
 cross_table(df_test_final, 'start_time')
 
 
-# In[ ]:
+# In[54]:
 
 
 frequency_proportion(df_test_final, 'start_time')
 
 
-# In[ ]:
+# In[69]:
 
 
 df_test_final['last_step'].value_counts()
 
 
-# In[ ]:
+# In[70]:
 
 
 tab_test_last_step = df_test_final['last_step'].value_counts().reset_index()
@@ -348,14 +1300,14 @@ tab_test_last_step.columns = ['last_step', 'count']
 tab_test_last_step
 
 
-# In[ ]:
+# In[71]:
 
 
 # Calculating the proportions for each value in 'tab_test_last_step' and rounding the results to two decimal places
 (tab_test_last_step['count'] / tab_test_last_step['count'].sum())
 
 
-# In[ ]:
+# In[72]:
 
 
 import matplotlib.pyplot as plt
@@ -490,9 +1442,15 @@ df_test_final = df_test_final.to_csv('../Data/Cleaned_Data/df_test_final.csv', i
 
 
 
+
+    # Multivariate Analysis
+    st.header("Multivariate Analysis")
+    #!/usr/bin/env python
+# coding: utf-8
+
 # # Import Libraries
 
-# In[ ]:
+# In[1]:
 
 
 import pandas as pd
@@ -506,7 +1464,7 @@ from sklearn.preprocessing import StandardScaler
 import plotly.graph_objects as go
 
 
-# In[ ]:
+# In[2]:
 
 
 import sys
@@ -531,7 +1489,7 @@ df_web_data = pd.concat([df_web_data_1, df_web_data_2], ignore_index= True)
 # # Data Preprocessing
 # ### Ensure that the data types are correctly assigned, especially for categorical variables.
 
-# In[ ]:
+# In[3]:
 
 
 df_test = convert_data_types_combined(df_test)
@@ -544,7 +1502,7 @@ df_combined = convert_data_types_combined(df_combined)
 
 # # Correlation between numerical variables
 
-# In[ ]:
+# In[4]:
 
 
 correlation_matrix = df_final.select_dtypes(include=[np.number]).corr()
@@ -598,7 +1556,7 @@ plt.show()
 # #### Null Hypothesis : The average age of clients engaging with the new process (Test) is the same as the average age of clients engaging with the old process (Control).
 # ##### Alternative Hypothesis : The average age of clients engaging with the new process (Test) is different from the average age of clients engaging with the old process (Control).
 
-# In[ ]:
+# In[5]:
 
 
 test_age = df_final[df_final['variation'] == 'Test']['clnt_age']
@@ -613,7 +1571,7 @@ print(f'Age t-statistic: {t_stat_age}, p-value: {p_value_age}')
 # ### Null Hypothesis: The average client tenure of those engaging with the new process (Test) is the same as those engaging with the old process (Control).
 # ### Alternative Hypothesis: The average client tenure of those engaging with the new process (Test) is different from those engaging with the old process (Control).
 
-# In[ ]:
+# In[6]:
 
 
 test_tenure = df_final[df_final['variation'] == 'Test']['clnt_tenure_yr']
@@ -628,7 +1586,7 @@ print(f'Tenure t-statistic: {t_stat_tenure}, p-value: {p_value_tenure}')
 # ### Null Hypothesis: Gender does not affect the likelihood of engaging with the new process (Test) or the old process (Control).
 # ### Alternative Hypothesis: Gender affects the likelihood of engaging with the new process (Test) or the old process (Control).
 
-# In[ ]:
+# In[7]:
 
 
 contingency_table_gender_process = pd.crosstab(df_final['gendr'], df_final['variation'])
@@ -644,7 +1602,7 @@ print(f'Chi-square statistic for gender and process: {chi2_stat_gender}, p-value
 # ### Null Hypothesis (H0): There is no significant difference in completion rates between the Test and Control groups.
 # ### Alternative Hypothesis (H1): The completion rate of the Test group is significantly higher than the completion rate of the Control group.
 
-# In[ ]:
+# In[8]:
 
 
 # Compute the contingency table
@@ -666,7 +1624,7 @@ print(f"Cramér's V for the association between variation and completion: {crame
 
 # ### Testing Hypothesis ensuring completion rate from the A/B test meets or exceeds this 5% threshold.
 
-# In[ ]:
+# In[9]:
 
 
 # Calculate Completion Rates
@@ -680,7 +1638,7 @@ print(f'Completion rate for Control group: {completion_rate_control}')
 print(f'Percentage increase in completion rate: {percentage_increase}%')
 
 
-# In[ ]:
+# In[10]:
 
 
 import matplotlib.pyplot as plt
@@ -720,7 +1678,7 @@ plt.show()
 # ### Alternative Hypothesis (H1): The increase in completion rate is at least 5%.
 # 
 
-# In[ ]:
+# In[11]:
 
 
 # Perform the Two-Proportion Z-Test:
@@ -742,7 +1700,7 @@ z_stat, p_value = proportions_ztest([num_success_test, num_success_control], [nu
 print(f'Two-proportion z-test statistic: {z_stat}, p-value: {p_value}')
 
 
-# In[ ]:
+# In[12]:
 
 
 # Define the threshold for percentage increase
@@ -758,7 +1716,7 @@ else:
     print('The increase in completion rate is not statistically significant.')
 
 
-# In[ ]:
+# In[13]:
 
 
 import matplotlib.pyplot as plt
@@ -797,7 +1755,7 @@ plt.show()
 # ### Null Hypothesis (H0):  There is no significative difference between the time spent in the new website between test and control groups.
 # ### Alternative Hypothesis (H1): There is a significative difference between the time spent in the new website between test and control groups.
 
-# In[ ]:
+# In[14]:
 
 
 # Calculate the mean of total_time_visit for 'Test' variation
@@ -810,7 +1768,7 @@ print(f"Mean total time visit for 'Test' variation: {mean_total_time_test}")
 print(f"Mean total time visit for 'Control' variation: {mean_total_time_control}")
 
 
-# In[ ]:
+# In[15]:
 
 
 # Extract total time visit for each group
@@ -825,7 +1783,7 @@ print(f'Total time visit t-statistic: {t_stat_time}, p-value: {p_value_time}')
 
 # Reject the null hypothesis. This suggests that there is a statistically significant difference in the total time spent on the site between clients in the Test group (5.25) and clients in the Control group (4.67).
 
-# In[ ]:
+# In[16]:
 
 
 import matplotlib.pyplot as plt
@@ -863,7 +1821,7 @@ plt.show()
 # ### Null Hypothesis (H0):  The average number of accounts is the same for clients engaging with the new process (Test) and those engaging with the old process (Control).
 # ### Alternative Hypothesis (H1):The average number of accounts is different for clients engaging with the new process and those engaging with the old process.
 
-# In[ ]:
+# In[17]:
 
 
 # Extract number of accounts for each group
@@ -884,7 +1842,7 @@ print(f'Number of accounts t-statistic: {t_stat_accounts}, p-value: {p_value_acc
 # 
 # 
 
-# In[ ]:
+# In[18]:
 
 
 # Calculate the mean of total_time_visit for 'Test' variation
@@ -897,7 +1855,7 @@ print(f"Mean logons for 'Test' variation: {mean_total_time_test}")
 print(f"Mean logons for 'Control' variation: {mean_total_time_control}")
 
 
-# In[ ]:
+# In[19]:
 
 
 test_logons = df_final[df_final['variation'] == 'Test']['logons_6_mnth']
@@ -908,7 +1866,7 @@ print(f'Balance t-statistic: {t_stat_balances}, p-value: {p_value_balances}')
 
 #  Reject the null hypothesis. This implies that there is a statistically difference in the average balance between the Test group (5.25) and the Control group (4.67).
 
-# In[ ]:
+# In[20]:
 
 
 test_calls = df_final[df_final['variation'] == 'Test']['calls_6_mnth']
@@ -917,7 +1875,7 @@ t_stat_calls, p_value_calls = ttest_ind(test_calls, control_calls)
 print(f'Calls in last 6 months t-statistic: {t_stat_calls}, p-value: {p_value_calls}')
 
 
-# In[ ]:
+# In[21]:
 
 
 # Extract recent call activity for each group
@@ -931,14 +1889,14 @@ print(f'Navigations between start and last t-statistic: {t_stat_navigations}, p-
 
 # Reject the null hypothesis. This means that there is a statistically significant difference in the number of calls in the last 6 months between the Test group (new process) and the Control group (old process).
 
-# In[ ]:
+# In[22]:
 
 
 test_navigations = df_final[df_final['variation'] == 'Test']['navigations_bt_start_last']
 control_navigations = df_final[df_final['variation'] == 'Control']['navigations_bt_start_last']
 
 
-# In[ ]:
+# In[23]:
 
 
 t_stat_navigations, p_value_navigations = ttest_ind(test_navigations, control_navigations)
@@ -952,7 +1910,7 @@ print(f'Navigations between start and last t-statistic: {t_stat_navigations}, p-
 # If the Test group has fewer navigations: This could suggest that the new process is more efficient or requires fewer steps.
 # Needs further investigations
 
-# In[ ]:
+# In[24]:
 
 
 import matplotlib.pyplot as plt
@@ -1023,7 +1981,7 @@ plt.show()
 # ### Null Hypothesis (H0): There is no significant difference in the error rates between the Test and Control groups.
 # ### Alternative Hypothesis (H1): There is a significant difference in the error rates between the Test and Control groups.
 
-# In[ ]:
+# In[25]:
 
 
 import pandas as pd
@@ -1082,7 +2040,7 @@ else:
     print("Fail to reject the null hypothesis. There is no significant difference in error rates between the Test and Control groups.")
 
 
-# In[ ]:
+# In[26]:
 
 
 import matplotlib.pyplot as plt
@@ -1115,7 +2073,7 @@ ax.set_ylim(0, max(error_rate_test, error_rate_control) + 0.01)
 plt.show()
 
 
-# In[ ]:
+# In[27]:
 
 
 df_test_final['navigations_bt_start_last'].value_counts()
@@ -1123,7 +2081,7 @@ df_test_final['navigations_bt_start_last'].value_counts()
 
 # # Visualization of different parameters
 
-# In[ ]:
+# In[28]:
 
 
 # Create a new column categorizing the total number of navigations
@@ -1142,7 +2100,7 @@ plt.legend(title='Completion', loc='upper right')
 plt.show()
 
 
-# In[ ]:
+# In[29]:
 
 
 # We will create a frequency plot for total navigations based on completion status
@@ -1179,7 +2137,7 @@ plt.tight_layout()
 plt.show()
 
 
-# In[ ]:
+# In[30]:
 
 
 # We will create a frequency plot for total navigations based on completion status
@@ -1219,7 +2177,7 @@ plt.show()
 
 
 
-# In[ ]:
+# In[31]:
 
 
 import plotly.graph_objects as go
@@ -1286,7 +2244,7 @@ fig.update_layout(
 fig.show()
 
 
-# In[ ]:
+# In[32]:
 
 
 # Assuming df_final is already loaded and processed
@@ -1339,7 +2297,7 @@ fig.update_layout(
 fig.show()
 
 
-# In[ ]:
+# In[33]:
 
 
 import plotly.graph_objects as go
@@ -1397,7 +2355,7 @@ fig.update_layout(
 fig.show()
 
 
-# In[ ]:
+# In[34]:
 
 
 # Convert 'date' columns to datetime
@@ -1455,7 +2413,7 @@ fig.show()
 
 
 
-# In[ ]:
+# In[35]:
 
 
 import plotly.graph_objs as go
@@ -1535,7 +2493,7 @@ fig.update_yaxes(title_text="Completion Rate", tickformat=".0%", row=2, col=1)
 fig.show()
 
 
-# In[ ]:
+# In[36]:
 
 
 from scipy.stats import shapiro
@@ -1550,7 +2508,7 @@ else:
     print('Sample does not look Gaussian (reject H0)')
 
 
-# In[ ]:
+# In[37]:
 
 
 from scipy.stats import spearmanr, kendalltau
@@ -1566,7 +2524,7 @@ print(f'Kendall Tau correlation: {kendall_corr}, p-value: {kendall_p}')
 
 # # Step by step EDA for numerical columns
 
-# In[ ]:
+# In[38]:
 
 
 from scipy.stats import shapiro
@@ -1578,7 +2536,7 @@ print(shapiro_test)
 
 # ## Gender Distribution
 
-# In[ ]:
+# In[39]:
 
 
 import matplotlib.pyplot as plt
@@ -1631,7 +2589,7 @@ plt.show()
 
 # ## Tenure Distribution
 
-# In[ ]:
+# In[40]:
 
 
 # Create tenure bins of 5 years
@@ -1671,7 +2629,7 @@ plt.show()
 
 # ## Age Distribution
 
-# In[ ]:
+# In[41]:
 
 
 # Create age bins of 10 years
@@ -1709,7 +2667,7 @@ plt.show()
 
 
 
-# In[ ]:
+# In[42]:
 
 
 import plotly.graph_objects as go
@@ -1804,7 +2762,7 @@ fig.show()
 
 # 1. Design Effectiveness: Demographic Distributions
 
-# In[ ]:
+# In[43]:
 
 
 import matplotlib.pyplot as plt
@@ -1833,7 +2791,7 @@ plot_demographics(df_final, 'gendr')
 plot_demographics(df_final, 'clnt_tenure_yr', bin_size=4)
 
 
-# In[ ]:
+# In[44]:
 
 
 df_final['date'] = pd.to_datetime(df_final['date'])
@@ -1870,3 +2828,7 @@ df_final.shape(10)
 
 
 
+
+
+if __name__ == "__main__":
+    main()
